@@ -1,0 +1,11 @@
+node_modules/
+.expo/
+.env
+.env.local
+dist/
+build/
+coverage/
+.turbo/
+.DS_Store
+*.log
+apps/api/prisma/dev.db

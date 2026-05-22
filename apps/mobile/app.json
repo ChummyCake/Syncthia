@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Syncthia",
+    "slug": "syncthia",
+    "scheme": "syncthia",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.syncthia.mobile"
+    },
+    "android": {
+      "package": "app.syncthia.mobile"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}

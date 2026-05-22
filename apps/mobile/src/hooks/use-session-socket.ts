@@ -1,0 +1,51 @@
+import { useEffect } from "react";
+import { io } from "socket.io-client";
+import { CallSession, SwitchProposal } from "@syncthia/shared";
+import { useSessionStore } from "../store/session-store";
+
+const WS_URL = process.env.EXPO_PUBLIC_WS_URL ?? "ws://localhost:4000/sessions";
+
+export function useSessionSocket(sessionId?: string) {
+  const setSessionResponse = useSessionStore((state) => state.setSessionResponse);
+  const upsertProposal = useSessionStore((state) => state.upsertProposal);
+
+  useEffect(() => {
+    const socket = io(WS_URL, {
+      transports: ["websocket"]
+    });
+
+    socket.on("session.updated", ({ session }: { session: CallSession }) => {
+      if (sessionId && session.id !== sessionId) {
+        return;
+      }
+      setSessionResponse({ session });
+    });
+
+    const handleProposal = ({ proposal }: { proposal: SwitchProposal }) => {
+      if (sessionId && proposal.sessionId !== sessionId) {
+        return;
+      }
+      upsertProposal(proposal);
+    };
+
+    socket.on("switch.proposed", handleProposal);
+    socket.on("switch.accepted", handleProposal);
+    socket.on("switch.rejected", handleProposal);
+    socket.on("switch.expired", handleProposal);
+    socket.on("switch.launching", handleProposal);
+    socket.on(
+      "switch.confirmed",
+      ({ session, proposal }: { session: CallSession; proposal: SwitchProposal }) => {
+        if (sessionId && session.id !== sessionId) {
+          return;
+        }
+        setSessionResponse({ session });
+        upsertProposal(proposal);
+      }
+    );
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [sessionId, setSessionResponse, upsertProposal]);
+}
