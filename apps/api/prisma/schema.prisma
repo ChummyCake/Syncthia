@@ -24,10 +24,10 @@ enum SwitchStatus {
 }
 
 model User {
-  id               String            @id @default(uuid())
+  id               String               @id @default(uuid())
   displayName      String
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
   devices          Device[]
   providerProfiles ProviderProfile[]
   participantLinks SessionParticipant[]
@@ -58,13 +58,28 @@ model ProviderProfile {
 }
 
 model CallSession {
-  id             String               @id @default(uuid())
-  activeProvider Provider
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
-  participants   SessionParticipant[]
-  proposals      SwitchProposal[]
-  auditEvents    AuditEvent[]
+  id                String               @id @default(uuid())
+  activeProvider    Provider
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  participants      SessionParticipant[]
+  providerEndpoints ProviderEndpoint[]
+  proposals         SwitchProposal[]
+  auditEvents       AuditEvent[]
+}
+
+model ProviderEndpoint {
+  id        String      @id @default(uuid())
+  sessionId String
+  provider  Provider
+  handle    String?
+  appUrl    String?
+  webUrl    String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  session   CallSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, provider])
 }
 
 model SessionParticipant {

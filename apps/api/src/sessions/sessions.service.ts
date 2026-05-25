@@ -1,7 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException
+} from "@nestjs/common";
 import {
   CallSession,
-  ProviderEndpoint,
   SwitchProposal,
   acceptSwitchProposal,
   assertProvider,
@@ -20,25 +24,24 @@ import {
 } from "./dto";
 import { NotificationsService } from "../notifications/notifications.service";
 import { SessionEventsGateway } from "./session-events.gateway";
+import {
+  SESSIONS_REPOSITORY,
+  SessionsRepository,
+  StoredSession
+} from "./sessions.repository";
 
 const SWITCH_TTL_MS = 2 * 60 * 1000;
 
-interface StoredSession {
-  session: CallSession;
-  providerEndpoints: ProviderEndpoint[];
-  proposals: SwitchProposal[];
-}
-
 @Injectable()
 export class SessionsService {
-  private readonly sessions = new Map<string, StoredSession>();
-
   constructor(
     private readonly events: SessionEventsGateway,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    @Inject(SESSIONS_REPOSITORY)
+    private readonly sessionsRepository: SessionsRepository
   ) {}
 
-  createSession(dto: CreateSessionDto) {
+  async createSession(dto: CreateSessionDto) {
     const now = new Date().toISOString();
     const activeProvider = assertProvider(dto.activeProvider);
     const participantIds = new Set<string>();
@@ -68,18 +71,18 @@ export class SessionsService {
       proposals: []
     };
 
-    this.sessions.set(session.id, storedSession);
+    const persistedSession = await this.sessionsRepository.createSession(storedSession);
     this.events.emitSessionUpdated(session);
 
-    return this.toSessionResponse(storedSession);
+    return this.toSessionResponse(persistedSession);
   }
 
-  getSession(sessionId: string) {
-    return this.toSessionResponse(this.getStoredSession(sessionId));
+  async getSession(sessionId: string) {
+    return this.toSessionResponse(await this.getStoredSession(sessionId));
   }
 
-  createSwitchProposal(sessionId: string, dto: CreateSwitchProposalDto) {
-    const storedSession = this.getStoredSession(sessionId);
+  async createSwitchProposal(sessionId: string, dto: CreateSwitchProposalDto) {
+    const storedSession = await this.getStoredSession(sessionId);
 
     try {
       const proposal = createSwitchProposal({
@@ -93,7 +96,7 @@ export class SessionsService {
         ttlMs: SWITCH_TTL_MS
       });
 
-      storedSession.proposals.push(proposal);
+      await this.sessionsRepository.addProposal(proposal);
       this.scheduleExpiry(proposal.id, new Date(proposal.expiresAt));
       this.events.emitSwitchProposed(proposal);
       this.notifications.queueSwitchNotification(
@@ -114,8 +117,8 @@ export class SessionsService {
     }
   }
 
-  acceptProposal(proposalId: string, dto: ParticipantActionDto) {
-    const { storedSession, proposal } = this.getProposal(proposalId);
+  async acceptProposal(proposalId: string, dto: ParticipantActionDto) {
+    const { storedSession, proposal } = await this.getProposal(proposalId);
 
     try {
       const updatedProposal = acceptSwitchProposal(
@@ -125,7 +128,7 @@ export class SessionsService {
         new Date()
       );
 
-      this.replaceProposal(storedSession, updatedProposal);
+      await this.sessionsRepository.updateProposal(updatedProposal);
       this.events.emitSwitchAccepted(updatedProposal);
 
       const launchTarget =
@@ -156,8 +159,8 @@ export class SessionsService {
     }
   }
 
-  rejectProposal(proposalId: string, dto: ParticipantActionDto) {
-    const { storedSession, proposal } = this.getProposal(proposalId);
+  async rejectProposal(proposalId: string, dto: ParticipantActionDto) {
+    const { storedSession, proposal } = await this.getProposal(proposalId);
 
     try {
       const updatedProposal = rejectSwitchProposal(
@@ -167,7 +170,7 @@ export class SessionsService {
         new Date()
       );
 
-      this.replaceProposal(storedSession, updatedProposal);
+      await this.sessionsRepository.updateProposal(updatedProposal);
       this.events.emitSwitchRejected(updatedProposal);
 
       return { proposal: updatedProposal };
@@ -176,8 +179,8 @@ export class SessionsService {
     }
   }
 
-  confirmJoined(proposalId: string, dto: ParticipantActionDto) {
-    const { storedSession, proposal } = this.getProposal(proposalId);
+  async confirmJoined(proposalId: string, dto: ParticipantActionDto) {
+    const { storedSession, proposal } = await this.getProposal(proposalId);
 
     try {
       const result = confirmJoinedProvider(
@@ -187,8 +190,10 @@ export class SessionsService {
         new Date()
       );
 
-      storedSession.session = result.session;
-      this.replaceProposal(storedSession, result.proposal);
+      await this.sessionsRepository.updateSessionAndProposal(
+        result.session,
+        result.proposal
+      );
 
       if (result.proposal.status === "confirmed") {
         this.events.emitSwitchConfirmed(result.session, result.proposal);
@@ -204,29 +209,22 @@ export class SessionsService {
     }
   }
 
-  private getStoredSession(sessionId: string) {
-    const storedSession = this.sessions.get(sessionId);
+  private async getStoredSession(sessionId: string) {
+    const storedSession = await this.sessionsRepository.getSession(sessionId);
     if (!storedSession) {
       throw new NotFoundException(`Session ${sessionId} was not found.`);
     }
     return storedSession;
   }
 
-  private getProposal(proposalId: string) {
-    for (const storedSession of this.sessions.values()) {
-      const proposal = storedSession.proposals.find((candidate) => candidate.id === proposalId);
-      if (proposal) {
-        return { storedSession, proposal };
-      }
+  private async getProposal(proposalId: string) {
+    const proposalLookup = await this.sessionsRepository.getProposal(proposalId);
+
+    if (!proposalLookup) {
+      throw new NotFoundException(`Switch proposal ${proposalId} was not found.`);
     }
 
-    throw new NotFoundException(`Switch proposal ${proposalId} was not found.`);
-  }
-
-  private replaceProposal(storedSession: StoredSession, proposal: SwitchProposal) {
-    storedSession.proposals = storedSession.proposals.map((candidate) =>
-      candidate.id === proposal.id ? proposal : candidate
-    );
+    return proposalLookup;
   }
 
   private toSessionResponse(storedSession: StoredSession) {
@@ -244,24 +242,28 @@ export class SessionsService {
   private scheduleExpiry(proposalId: string, expiresAt: Date) {
     const delayMs = Math.max(0, expiresAt.getTime() - Date.now());
     const timeout = setTimeout(() => {
-      try {
-        const { storedSession, proposal } = this.getProposal(proposalId);
-        const expiredProposal = expireSwitchProposal(proposal, new Date());
-        if (expiredProposal.status === "expired" && proposal.status !== "expired") {
-          this.replaceProposal(storedSession, expiredProposal);
-          this.events.emitSwitchExpired(expiredProposal);
-          this.notifications.queueSwitchNotification(
-            expiredProposal.requesterId,
-            "switch.expired",
-            expiredProposal
-          );
-        }
-      } catch {
-        return;
-      }
+      void this.expireProposal(proposalId);
     }, delayMs);
 
     (timeout as unknown as { unref?: () => void }).unref?.();
+  }
+
+  private async expireProposal(proposalId: string) {
+    try {
+      const { proposal } = await this.getProposal(proposalId);
+      const expiredProposal = expireSwitchProposal(proposal, new Date());
+      if (expiredProposal.status === "expired" && proposal.status !== "expired") {
+        await this.sessionsRepository.updateProposal(expiredProposal);
+        this.events.emitSwitchExpired(expiredProposal);
+        this.notifications.queueSwitchNotification(
+          expiredProposal.requesterId,
+          "switch.expired",
+          expiredProposal
+        );
+      }
+    } catch {
+      return;
+    }
   }
 
   private reasonToSignals(reason: string) {

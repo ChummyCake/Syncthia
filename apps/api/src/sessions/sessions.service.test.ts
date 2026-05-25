@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { NotificationsService } from "../notifications/notifications.service";
+import { InMemorySessionsRepository } from "./in-memory-sessions.repository";
 import { SessionEventsGateway } from "./session-events.gateway";
 import { SessionsService } from "./sessions.service";
 
@@ -21,15 +22,19 @@ function createService() {
   return {
     events,
     notifications,
-    service: new SessionsService(events, notifications)
+    service: new SessionsService(
+      events,
+      notifications,
+      new InMemorySessionsRepository()
+    )
   };
 }
 
 describe("SessionsService", () => {
-  it("creates a session with one active provider", () => {
+  it("creates a session with one active provider", async () => {
     const { service } = createService();
 
-    const response = service.createSession({
+    const response = await service.createSession({
       activeProvider: "messenger",
       participants: [
         { id: "u1", displayName: "Ava" },
@@ -41,9 +46,9 @@ describe("SessionsService", () => {
     expect(response.session.participants).toHaveLength(2);
   });
 
-  it("switches provider only after accept and both join confirmations", () => {
+  it("switches provider only after accept and both join confirmations", async () => {
     const { service, events } = createService();
-    const created = service.createSession({
+    const created = await service.createSession({
       activeProvider: "messenger",
       participants: [
         { id: "u1", displayName: "Ava" },
@@ -51,27 +56,27 @@ describe("SessionsService", () => {
       ]
     });
 
-    const proposed = service.createSwitchProposal(created.session.id, {
+    const proposed = await service.createSwitchProposal(created.session.id, {
       requesterId: "u1",
       recipientId: "u2",
       toProvider: "discord",
       reason: "streaming"
     });
 
-    const accepted = service.acceptProposal(proposed.proposal.id, {
+    const accepted = await service.acceptProposal(proposed.proposal.id, {
       participantId: "u2"
     });
 
     expect(accepted.proposal.status).toBe("launching");
     expect(accepted.launchTarget?.provider).toBe("discord");
 
-    const firstJoin = service.confirmJoined(proposed.proposal.id, {
+    const firstJoin = await service.confirmJoined(proposed.proposal.id, {
       participantId: "u1"
     });
 
     expect(firstJoin.session.activeProvider).toBe("messenger");
 
-    const secondJoin = service.confirmJoined(proposed.proposal.id, {
+    const secondJoin = await service.confirmJoined(proposed.proposal.id, {
       participantId: "u2"
     });
 

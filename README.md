@@ -15,13 +15,15 @@ The app does not proxy or control third-party audio/video. It keeps call session
 ```bash
 pnpm install
 docker compose up -d
+pnpm --filter @syncthia/api prisma:generate
+pnpm --filter @syncthia/api prisma:migrate
 pnpm dev:api
 pnpm dev:mobile
 pnpm test
 pnpm typecheck
 ```
 
-The API currently uses an in-memory session repository for fast MVP iteration. The Prisma schema in `apps/api/prisma/schema.prisma` defines the Postgres persistence target for the next step.
+The API uses Prisma/Postgres for persisted sessions, switch proposals, join confirmations, provider endpoints, devices, and audit records. Unit tests use an in-memory session repository so they do not require a running database.
 
 ## Provider Scope
 
