@@ -2,12 +2,12 @@
   "name": "syncthia",
   "private": true,
   "version": "0.1.0",
-  "packageManager": "pnpm@9.12.3",
+  "packageManager": "pnpm@11.3.0",
   "scripts": {
     "dev:api": "pnpm --filter @syncthia/shared build && pnpm --filter @syncthia/api start:dev",
     "dev:mobile": "pnpm --filter @syncthia/mobile start",
     "build": "pnpm -r build",
-    "test": "pnpm -r test",
+    "test": "pnpm --filter @syncthia/shared build && pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint"
   },
