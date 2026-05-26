@@ -8,7 +8,7 @@
     "dev:mobile": "pnpm --filter @syncthia/mobile start",
     "build": "pnpm -r build",
     "test": "pnpm --filter @syncthia/shared build && pnpm -r test",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm --filter @syncthia/shared build && pnpm -r typecheck",
     "lint": "pnpm -r lint"
   },
   "workspaces": [

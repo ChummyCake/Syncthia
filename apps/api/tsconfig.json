@@ -5,7 +5,10 @@
     "moduleResolution": "Node",
     "target": "ES2022",
     "outDir": "dist",
-    "rootDir": "../..",
+    "rootDir": "src",
+    "paths": {
+      "@syncthia/shared": ["packages/shared/dist/index.d.ts"]
+    },
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
