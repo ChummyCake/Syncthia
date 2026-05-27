@@ -58,6 +58,50 @@ describeDb("PrismaSessionsRepository", () => {
         webUrl: "https://discord.gg/syncthia"
       }
     ]);
+
+    const updated = await repository.upsertProviderEndpoint(
+      storedSession.session.id,
+      {
+        provider: "discord",
+        handle: "updated-stream-room",
+        appUrl: "discord://-/channels/999/888",
+        webUrl: "https://discord.gg/updated"
+      }
+    );
+
+    expect(updated.providerEndpoints).toEqual([
+      {
+        provider: "discord",
+        handle: "updated-stream-room",
+        appUrl: "discord://-/channels/999/888",
+        webUrl: "https://discord.gg/updated"
+      }
+    ]);
+
+    const added = await repository.upsertProviderEndpoint(
+      storedSession.session.id,
+      {
+        provider: "zalo",
+        handle: "84330000000",
+        webUrl: "https://zalo.me/84330000000"
+      }
+    );
+
+    expect(added.providerEndpoints).toEqual(
+      expect.arrayContaining([
+        {
+          provider: "discord",
+          handle: "updated-stream-room",
+          appUrl: "discord://-/channels/999/888",
+          webUrl: "https://discord.gg/updated"
+        },
+        {
+          provider: "zalo",
+          handle: "84330000000",
+          webUrl: "https://zalo.me/84330000000"
+        }
+      ])
+    );
   });
 
   it("persists proposal acceptance and join confirmations", async () => {

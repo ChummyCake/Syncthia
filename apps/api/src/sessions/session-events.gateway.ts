@@ -1,5 +1,6 @@
 import {
   CallSession,
+  ProviderEndpoint,
   ProviderLaunchTarget,
   SwitchProposal
 } from "@syncthia/shared";
@@ -43,8 +44,11 @@ export class SessionEventsGateway {
     return { sessionId };
   }
 
-  emitSessionUpdated(session: CallSession) {
-    this.emitToSession(session.id, "session.updated", { session });
+  emitSessionUpdated(session: CallSession, providerEndpoints?: ProviderEndpoint[]) {
+    this.emitToSession(session.id, "session.updated", {
+      session,
+      ...(providerEndpoints ? { providerEndpoints } : {})
+    });
   }
 
   emitSwitchProposed(proposal: SwitchProposal) {

@@ -31,6 +31,23 @@ export async function getSession(sessionId: string): Promise<SessionResponse> {
   return apiFetch(`/sessions/${sessionId}`);
 }
 
+export async function updateProviderEndpoint(input: {
+  sessionId: string;
+  endpoint: ProviderEndpoint;
+}): Promise<SessionResponse> {
+  return apiFetch(
+    `/sessions/${input.sessionId}/provider-endpoints/${input.endpoint.provider}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        handle: input.endpoint.handle,
+        appUrl: input.endpoint.appUrl,
+        webUrl: input.endpoint.webUrl
+      })
+    }
+  );
+}
+
 export async function createSwitchProposal(input: {
   sessionId: string;
   requesterId: string;

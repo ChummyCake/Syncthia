@@ -13,7 +13,9 @@ import {
 } from "react-native";
 import {
   Provider,
+  ProviderEndpoint,
   PROVIDER_LABELS,
+  PROVIDERS,
   buildProviderLaunchTarget,
   otherProviders,
   recommendProviders
@@ -23,7 +25,8 @@ import {
   confirmJoined,
   createSwitchProposal,
   getSession,
-  rejectProposal
+  rejectProposal,
+  updateProviderEndpoint
 } from "../../src/lib/api";
 import { ActionButton } from "../../src/components/ActionButton";
 import { ProviderPicker } from "../../src/components/ProviderPicker";
@@ -39,6 +42,12 @@ const reasonPresets = [
   "gaming",
   "Zalo-first contact"
 ];
+
+type EndpointDraft = {
+  handle: string;
+  appUrl: string;
+  webUrl: string;
+};
 
 export default function SessionScreen() {
   const params = useLocalSearchParams<{ sessionId: string; participantId?: string }>();
@@ -57,6 +66,10 @@ export default function SessionScreen() {
   const [toProvider, setToProvider] = useState<Provider>("discord");
   const [reason, setReason] = useState("streaming");
   const [isBusy, setIsBusy] = useState(false);
+  const [endpointDrafts, setEndpointDrafts] = useState<Record<Provider, EndpointDraft>>(
+    () => createEndpointDrafts([])
+  );
+  const [savingEndpoint, setSavingEndpoint] = useState<Provider>();
 
   useEffect(() => {
     if (params.participantId) {
@@ -86,6 +99,10 @@ export default function SessionScreen() {
       setToProvider(otherProviders(session.activeProvider)[0]);
     }
   }, [session?.activeProvider, toProvider]);
+
+  useEffect(() => {
+    setEndpointDrafts(createEndpointDrafts(providerEndpoints));
+  }, [providerEndpoints]);
 
   const currentParticipant = session?.participants.find(
     (participant) => participant.id === currentParticipantId
@@ -130,6 +147,45 @@ export default function SessionScreen() {
       Alert.alert("Switch not proposed", error instanceof Error ? error.message : "Unknown error");
     } finally {
       setIsBusy(false);
+    }
+  }
+
+  function updateEndpointDraft(
+    provider: Provider,
+    field: keyof EndpointDraft,
+    value: string
+  ) {
+    setEndpointDrafts((drafts) => ({
+      ...drafts,
+      [provider]: {
+        ...drafts[provider],
+        [field]: value
+      }
+    }));
+  }
+
+  async function handleSaveEndpoint(provider: Provider) {
+    if (!session) {
+      return;
+    }
+
+    setSavingEndpoint(provider);
+    try {
+      const draft = endpointDrafts[provider];
+      const response = await updateProviderEndpoint({
+        sessionId: session.id,
+        endpoint: {
+          provider,
+          handle: optionalText(draft.handle),
+          appUrl: optionalText(draft.appUrl),
+          webUrl: optionalText(draft.webUrl)
+        }
+      });
+      setSessionResponse(response);
+    } catch (error) {
+      Alert.alert("Launch setup not saved", error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setSavingEndpoint(undefined);
     }
   }
 
@@ -273,6 +329,50 @@ export default function SessionScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Launch setup</Text>
+        {PROVIDERS.map((provider) => (
+          <View key={provider} style={styles.endpointPanel}>
+            <View style={styles.endpointHeader}>
+              <Text style={[styles.endpointTitle, { color: colors[provider] }]}>
+                {PROVIDER_LABELS[provider]}
+              </Text>
+              <ActionButton
+                label="Save"
+                icon="save"
+                tone="neutral"
+                disabled={savingEndpoint === provider}
+                onPress={() => handleSaveEndpoint(provider)}
+              />
+            </View>
+            <View style={styles.endpointFields}>
+              <TextInput
+                value={endpointDrafts[provider].handle}
+                onChangeText={(value) => updateEndpointDraft(provider, "handle", value)}
+                placeholder="Handle"
+                style={styles.input}
+              />
+              <TextInput
+                value={endpointDrafts[provider].appUrl}
+                onChangeText={(value) => updateEndpointDraft(provider, "appUrl", value)}
+                autoCapitalize="none"
+                keyboardType="url"
+                placeholder="App URL"
+                style={styles.input}
+              />
+              <TextInput
+                value={endpointDrafts[provider].webUrl}
+                onChangeText={(value) => updateEndpointDraft(provider, "webUrl", value)}
+                autoCapitalize="none"
+                keyboardType="url"
+                placeholder="Web URL"
+                style={styles.input}
+              />
+            </View>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Switch provider</Text>
         <ProviderPicker
           value={toProvider}
@@ -370,6 +470,30 @@ function reasonToSignals(reason: string) {
   ].filter(Boolean) as Parameters<typeof recommendProviders>[0]["signals"];
 }
 
+function createEndpointDrafts(
+  providerEndpoints: ProviderEndpoint[]
+): Record<Provider, EndpointDraft> {
+  return PROVIDERS.reduce(
+    (drafts, provider) => {
+      const endpoint = providerEndpoints.find(
+        (candidate) => candidate.provider === provider
+      );
+      drafts[provider] = {
+        handle: endpoint?.handle ?? "",
+        appUrl: endpoint?.appUrl ?? "",
+        webUrl: endpoint?.webUrl ?? ""
+      };
+      return drafts;
+    },
+    {} as Record<Provider, EndpointDraft>
+  );
+}
+
+function optionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 const styles = StyleSheet.create({
   loading: {
     alignItems: "center",
@@ -409,6 +533,28 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontWeight: "800"
+  },
+  endpointPanel: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md
+  },
+  endpointHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "space-between"
+  },
+  endpointTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "800"
+  },
+  endpointFields: {
+    gap: spacing.sm
   },
   segmented: {
     backgroundColor: "#e5edf5",

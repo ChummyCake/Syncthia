@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { io } from "socket.io-client";
-import { CallSession, SwitchProposal } from "@syncthia/shared";
+import { CallSession, ProviderEndpoint, SwitchProposal } from "@syncthia/shared";
 import { useSessionStore } from "../store/session-store";
 
 const WS_URL = process.env.EXPO_PUBLIC_WS_URL ?? "ws://localhost:4000/sessions";
@@ -24,12 +24,21 @@ export function useSessionSocket(sessionId?: string) {
 
     socket.on("connect", joinSession);
 
-    socket.on("session.updated", ({ session }: { session: CallSession }) => {
-      if (session.id !== sessionId) {
-        return;
+    socket.on(
+      "session.updated",
+      ({
+        session,
+        providerEndpoints
+      }: {
+        session: CallSession;
+        providerEndpoints?: ProviderEndpoint[];
+      }) => {
+        if (session.id !== sessionId) {
+          return;
+        }
+        setSessionResponse({ session, providerEndpoints });
       }
-      setSessionResponse({ session });
-    });
+    );
 
     const handleProposal = ({ proposal }: { proposal: SwitchProposal }) => {
       if (proposal.sessionId !== sessionId) {

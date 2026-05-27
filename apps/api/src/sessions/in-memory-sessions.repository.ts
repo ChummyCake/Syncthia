@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import {
   CallSession,
+  ProviderEndpoint,
   SwitchProposal,
   isExpirableSwitchStatus
 } from "@syncthia/shared";
@@ -35,6 +36,24 @@ export class InMemorySessionsRepository implements SessionsRepository {
           new Date(left.proposal.expiresAt).getTime() -
           new Date(right.proposal.expiresAt).getTime()
       );
+  }
+
+  async upsertProviderEndpoint(
+    sessionId: string,
+    endpoint: ProviderEndpoint
+  ): Promise<StoredSession> {
+    const storedSession = this.requireSession(sessionId);
+    storedSession.providerEndpoints = [
+      endpoint,
+      ...storedSession.providerEndpoints.filter(
+        (candidate) => candidate.provider !== endpoint.provider
+      )
+    ];
+    storedSession.session = {
+      ...storedSession.session,
+      updatedAt: new Date().toISOString()
+    };
+    return storedSession;
   }
 
   async addProposal(proposal: SwitchProposal): Promise<StoredSession> {

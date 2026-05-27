@@ -110,6 +110,47 @@ export class PrismaSessionsRepository implements SessionsRepository {
     return lookups.filter((lookup): lookup is ProposalLookup => Boolean(lookup));
   }
 
+  async upsertProviderEndpoint(
+    sessionId: string,
+    endpoint: ProviderEndpoint
+  ): Promise<StoredSession> {
+    return this.prisma.$transaction(async (tx) => {
+      const session = await tx.callSession.update({
+        where: { id: sessionId },
+        data: { updatedAt: new Date() },
+        select: { id: true }
+      });
+
+      await tx.providerEndpoint.upsert({
+        where: {
+          sessionId_provider: {
+            sessionId: session.id,
+            provider: fromProvider(endpoint.provider)
+          }
+        },
+        update: {
+          handle: endpoint.handle ?? null,
+          appUrl: endpoint.appUrl ?? null,
+          webUrl: endpoint.webUrl ?? null
+        },
+        create: {
+          sessionId: session.id,
+          provider: fromProvider(endpoint.provider),
+          handle: endpoint.handle ?? null,
+          appUrl: endpoint.appUrl ?? null,
+          webUrl: endpoint.webUrl ?? null
+        }
+      });
+
+      const storedSession = await this.loadSession(tx, session.id);
+      if (!storedSession) {
+        throw new Error(`Session ${session.id} was not found.`);
+      }
+
+      return toStoredSession(storedSession);
+    });
+  }
+
   async addProposal(proposal: SwitchProposal): Promise<StoredSession> {
     await this.prisma.switchProposal.create({
       data: {

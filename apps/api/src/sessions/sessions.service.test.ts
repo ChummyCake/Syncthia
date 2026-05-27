@@ -53,6 +53,40 @@ describe("SessionsService", () => {
     expect(response.session.participants).toHaveLength(2);
   });
 
+  it("updates provider endpoint launch details", async () => {
+    const { service, events } = createService();
+    const created = await service.createSession({
+      activeProvider: "messenger",
+      participants: [
+        { id: "u1", displayName: "Ava" },
+        { id: "u2", displayName: "Ben" }
+      ]
+    });
+
+    const updated = await service.updateProviderEndpoint(
+      created.session.id,
+      "discord",
+      {
+        handle: " stream-room ",
+        appUrl: " discord://-/channels/123/456 ",
+        webUrl: " https://discord.gg/syncthia "
+      }
+    );
+
+    expect(updated.providerEndpoints).toEqual([
+      {
+        provider: "discord",
+        handle: "stream-room",
+        appUrl: "discord://-/channels/123/456",
+        webUrl: "https://discord.gg/syncthia"
+      }
+    ]);
+    expect(events.emitSessionUpdated).toHaveBeenLastCalledWith(
+      updated.session,
+      updated.providerEndpoints
+    );
+  });
+
   it("switches provider only after accept and both join confirmations", async () => {
     const { service, events } = createService();
     const created = await service.createSession({

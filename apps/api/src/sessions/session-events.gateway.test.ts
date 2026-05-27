@@ -54,6 +54,25 @@ describe("SessionEventsGateway", () => {
     expect(room.emit).toHaveBeenCalledWith("session.updated", {
       session: expect.objectContaining({ id: "s1" })
     });
+
+    gateway.emitSessionUpdated(createSession("s1"), [
+      {
+        provider: "discord",
+        handle: "stream-room",
+        webUrl: "https://discord.gg/syncthia"
+      }
+    ]);
+
+    expect(room.emit).toHaveBeenCalledWith("session.updated", {
+      session: expect.objectContaining({ id: "s1" }),
+      providerEndpoints: [
+        {
+          provider: "discord",
+          handle: "stream-room",
+          webUrl: "https://discord.gg/syncthia"
+        }
+      ]
+    });
   });
 
   it("emits switch events only to the proposal session room", () => {

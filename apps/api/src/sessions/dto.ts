@@ -38,6 +38,20 @@ export class ProviderEndpointDto {
   webUrl?: string;
 }
 
+export class UpdateProviderEndpointDto {
+  @IsOptional()
+  @IsString()
+  handle?: string;
+
+  @IsOptional()
+  @IsString()
+  appUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  webUrl?: string;
+}
+
 export class CreateSessionDto {
   @IsIn(PROVIDERS)
   activeProvider: Provider;

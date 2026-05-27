@@ -8,6 +8,8 @@ import {
 } from "@nestjs/common";
 import {
   CallSession,
+  Provider,
+  ProviderEndpoint,
   SwitchProposal,
   acceptSwitchProposal,
   assertProvider,
@@ -22,7 +24,8 @@ import { randomUUID } from "node:crypto";
 import {
   CreateSessionDto,
   CreateSwitchProposalDto,
-  ParticipantActionDto
+  ParticipantActionDto,
+  UpdateProviderEndpointDto
 } from "./dto";
 import { NotificationsService } from "../notifications/notifications.service";
 import { SessionEventsGateway } from "./session-events.gateway";
@@ -82,18 +85,55 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
 
     const storedSession: StoredSession = {
       session,
-      providerEndpoints: dto.providerEndpoints ?? [],
+      providerEndpoints: (dto.providerEndpoints ?? []).map((endpoint) =>
+        this.normalizeProviderEndpoint(endpoint)
+      ),
       proposals: []
     };
 
     const persistedSession = await this.sessionsRepository.createSession(storedSession);
-    this.events.emitSessionUpdated(session);
+    this.events.emitSessionUpdated(
+      persistedSession.session,
+      persistedSession.providerEndpoints
+    );
 
     return this.toSessionResponse(persistedSession);
   }
 
   async getSession(sessionId: string) {
     return this.toSessionResponse(await this.getStoredSession(sessionId));
+  }
+
+  async updateProviderEndpoint(
+    sessionId: string,
+    providerInput: Provider,
+    dto: UpdateProviderEndpointDto
+  ) {
+    let provider: Provider;
+    try {
+      provider = assertProvider(providerInput);
+    } catch (error) {
+      throw this.toBadRequest(error);
+    }
+
+    await this.getStoredSession(sessionId);
+    const endpoint = this.normalizeProviderEndpoint({
+      provider,
+      handle: dto.handle,
+      appUrl: dto.appUrl,
+      webUrl: dto.webUrl
+    });
+    const storedSession = await this.sessionsRepository.upsertProviderEndpoint(
+      sessionId,
+      endpoint
+    );
+
+    this.events.emitSessionUpdated(
+      storedSession.session,
+      storedSession.providerEndpoints
+    );
+
+    return this.toSessionResponse(storedSession);
   }
 
   async createSwitchProposal(sessionId: string, dto: CreateSwitchProposalDto) {
@@ -254,6 +294,20 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
         activeProvider: storedSession.session.activeProvider
       })
     };
+  }
+
+  private normalizeProviderEndpoint(endpoint: ProviderEndpoint): ProviderEndpoint {
+    return {
+      provider: endpoint.provider,
+      handle: this.trimOptional(endpoint.handle),
+      appUrl: this.trimOptional(endpoint.appUrl),
+      webUrl: this.trimOptional(endpoint.webUrl)
+    };
+  }
+
+  private trimOptional(value?: string) {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : undefined;
   }
 
   private scheduleExpiry(proposalId: string, expiresAt: Date) {

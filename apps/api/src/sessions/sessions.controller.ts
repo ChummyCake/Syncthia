@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
 import {
   CreateSessionDto,
   CreateSwitchProposalDto,
-  ParticipantActionDto
+  ParticipantActionDto,
+  UpdateProviderEndpointDto
 } from "./dto";
+import { Provider } from "@syncthia/shared";
 import { SessionsService } from "./sessions.service";
 
 @Controller()
@@ -18,6 +20,15 @@ export class SessionsController {
   @Get("sessions/:sessionId")
   getSession(@Param("sessionId") sessionId: string) {
     return this.sessionsService.getSession(sessionId);
+  }
+
+  @Patch("sessions/:sessionId/provider-endpoints/:provider")
+  updateProviderEndpoint(
+    @Param("sessionId") sessionId: string,
+    @Param("provider") provider: Provider,
+    @Body() dto: UpdateProviderEndpointDto
+  ) {
+    return this.sessionsService.updateProviderEndpoint(sessionId, provider, dto);
   }
 
   @Post("sessions/:sessionId/switch-proposals")
