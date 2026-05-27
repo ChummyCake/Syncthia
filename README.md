@@ -25,6 +25,14 @@ pnpm typecheck
 
 The API uses Prisma/Postgres for persisted sessions, switch proposals, join confirmations, provider endpoints, devices, and audit records. Unit tests use an in-memory session repository so they do not require a running database.
 
+Run the persisted repository integration test with Postgres available:
+
+```powershell
+$env:DATABASE_URL="postgresql://postgres:postgres@localhost:5432/syncthia"
+$env:RUN_DB_TESTS="1"
+pnpm test:api:integration
+```
+
 ## Provider Scope
 
 - Messenger: launch/link-out for simple personal calls.
