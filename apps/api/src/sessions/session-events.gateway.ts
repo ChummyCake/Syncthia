@@ -5,9 +5,13 @@ import {
 } from "@syncthia/shared";
 import {
   WebSocketGateway,
-  WebSocketServer
+  WebSocketServer,
+  SubscribeMessage,
+  ConnectedSocket,
+  MessageBody,
+  WsException
 } from "@nestjs/websockets";
-import { Server } from "socket.io";
+import { Server, Socket } from "socket.io";
 
 @WebSocketGateway({
   cors: true,
@@ -17,35 +21,76 @@ export class SessionEventsGateway {
   @WebSocketServer()
   private server?: Server;
 
+  @SubscribeMessage("session.join")
+  handleJoinSession(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: SessionRoomPayload
+  ) {
+    const sessionId = this.requireSessionId(payload);
+    void client.join(sessionRoomName(sessionId));
+    client.emit("session.joined", { sessionId });
+    return { sessionId };
+  }
+
+  @SubscribeMessage("session.leave")
+  handleLeaveSession(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: SessionRoomPayload
+  ) {
+    const sessionId = this.requireSessionId(payload);
+    void client.leave(sessionRoomName(sessionId));
+    client.emit("session.left", { sessionId });
+    return { sessionId };
+  }
+
   emitSessionUpdated(session: CallSession) {
-    this.emit("session.updated", { session });
+    this.emitToSession(session.id, "session.updated", { session });
   }
 
   emitSwitchProposed(proposal: SwitchProposal) {
-    this.emit("switch.proposed", { proposal });
+    this.emitToSession(proposal.sessionId, "switch.proposed", { proposal });
   }
 
   emitSwitchAccepted(proposal: SwitchProposal) {
-    this.emit("switch.accepted", { proposal });
+    this.emitToSession(proposal.sessionId, "switch.accepted", { proposal });
   }
 
   emitSwitchRejected(proposal: SwitchProposal) {
-    this.emit("switch.rejected", { proposal });
+    this.emitToSession(proposal.sessionId, "switch.rejected", { proposal });
   }
 
   emitSwitchLaunching(proposal: SwitchProposal, launchTarget: ProviderLaunchTarget) {
-    this.emit("switch.launching", { proposal, launchTarget });
+    this.emitToSession(proposal.sessionId, "switch.launching", {
+      proposal,
+      launchTarget
+    });
   }
 
   emitSwitchConfirmed(session: CallSession, proposal: SwitchProposal) {
-    this.emit("switch.confirmed", { session, proposal });
+    this.emitToSession(session.id, "switch.confirmed", { session, proposal });
   }
 
   emitSwitchExpired(proposal: SwitchProposal) {
-    this.emit("switch.expired", { proposal });
+    this.emitToSession(proposal.sessionId, "switch.expired", { proposal });
   }
 
-  private emit(event: string, payload: unknown) {
-    this.server?.emit(event, payload);
+  private emitToSession(sessionId: string, event: string, payload: unknown) {
+    this.server?.to(sessionRoomName(sessionId)).emit(event, payload);
   }
+
+  private requireSessionId(payload: SessionRoomPayload) {
+    if (!payload || typeof payload.sessionId !== "string" || !payload.sessionId.trim()) {
+      throw new WsException("Session id is required.");
+    }
+
+    return payload.sessionId.trim();
+  }
+}
+
+interface SessionRoomPayload {
+  sessionId?: unknown;
+}
+
+export function sessionRoomName(sessionId: string) {
+  return `session:${sessionId}`;
 }

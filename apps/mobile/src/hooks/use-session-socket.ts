@@ -10,19 +10,29 @@ export function useSessionSocket(sessionId?: string) {
   const upsertProposal = useSessionStore((state) => state.upsertProposal);
 
   useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+
     const socket = io(WS_URL, {
       transports: ["websocket"]
     });
 
+    const joinSession = () => {
+      socket.emit("session.join", { sessionId });
+    };
+
+    socket.on("connect", joinSession);
+
     socket.on("session.updated", ({ session }: { session: CallSession }) => {
-      if (sessionId && session.id !== sessionId) {
+      if (session.id !== sessionId) {
         return;
       }
       setSessionResponse({ session });
     });
 
     const handleProposal = ({ proposal }: { proposal: SwitchProposal }) => {
-      if (sessionId && proposal.sessionId !== sessionId) {
+      if (proposal.sessionId !== sessionId) {
         return;
       }
       upsertProposal(proposal);
@@ -36,7 +46,7 @@ export function useSessionSocket(sessionId?: string) {
     socket.on(
       "switch.confirmed",
       ({ session, proposal }: { session: CallSession; proposal: SwitchProposal }) => {
-        if (sessionId && session.id !== sessionId) {
+        if (session.id !== sessionId) {
           return;
         }
         setSessionResponse({ session });
@@ -45,6 +55,7 @@ export function useSessionSocket(sessionId?: string) {
     );
 
     return () => {
+      socket.emit("session.leave", { sessionId });
       socket.disconnect();
     };
   }, [sessionId, setSessionResponse, upsertProposal]);
