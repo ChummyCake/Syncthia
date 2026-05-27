@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Inject,
   Injectable,
-  NotFoundException
+  NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit
 } from "@nestjs/common";
 import {
   CallSession,
@@ -33,13 +35,26 @@ import {
 const SWITCH_TTL_MS = 2 * 60 * 1000;
 
 @Injectable()
-export class SessionsService {
+export class SessionsService implements OnModuleInit, OnModuleDestroy {
+  private readonly expiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
   constructor(
     private readonly events: SessionEventsGateway,
     private readonly notifications: NotificationsService,
     @Inject(SESSIONS_REPOSITORY)
     private readonly sessionsRepository: SessionsRepository
   ) {}
+
+  async onModuleInit() {
+    await this.restoreProposalExpiryTimers();
+  }
+
+  onModuleDestroy() {
+    for (const timeout of this.expiryTimers.values()) {
+      clearTimeout(timeout);
+    }
+    this.expiryTimers.clear();
+  }
 
   async createSession(dto: CreateSessionDto) {
     const now = new Date().toISOString();
@@ -171,6 +186,7 @@ export class SessionsService {
       );
 
       await this.sessionsRepository.updateProposal(updatedProposal);
+      this.clearExpiryTimer(updatedProposal.id);
       this.events.emitSwitchRejected(updatedProposal);
 
       return { proposal: updatedProposal };
@@ -196,6 +212,7 @@ export class SessionsService {
       );
 
       if (result.proposal.status === "confirmed") {
+        this.clearExpiryTimer(result.proposal.id);
         this.events.emitSwitchConfirmed(result.session, result.proposal);
         this.events.emitSessionUpdated(result.session);
       }
@@ -240,15 +257,41 @@ export class SessionsService {
   }
 
   private scheduleExpiry(proposalId: string, expiresAt: Date) {
+    this.clearExpiryTimer(proposalId);
     const delayMs = Math.max(0, expiresAt.getTime() - Date.now());
     const timeout = setTimeout(() => {
       void this.expireProposal(proposalId);
     }, delayMs);
 
+    this.expiryTimers.set(proposalId, timeout);
     (timeout as unknown as { unref?: () => void }).unref?.();
   }
 
+  private clearExpiryTimer(proposalId: string) {
+    const timeout = this.expiryTimers.get(proposalId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.expiryTimers.delete(proposalId);
+    }
+  }
+
+  private async restoreProposalExpiryTimers() {
+    const activeProposals = await this.sessionsRepository.listExpirableProposals();
+    const now = Date.now();
+
+    for (const { proposal } of activeProposals) {
+      const expiresAt = new Date(proposal.expiresAt);
+      if (expiresAt.getTime() <= now) {
+        await this.expireProposal(proposal.id);
+      } else {
+        this.scheduleExpiry(proposal.id, expiresAt);
+      }
+    }
+  }
+
   private async expireProposal(proposalId: string) {
+    this.clearExpiryTimer(proposalId);
+
     try {
       const { proposal } = await this.getProposal(proposalId);
       const expiredProposal = expireSwitchProposal(proposal, new Date());

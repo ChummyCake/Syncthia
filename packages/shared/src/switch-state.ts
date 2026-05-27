@@ -12,6 +12,14 @@ export const SWITCH_STATUSES = [
 
 export type SwitchStatus = (typeof SWITCH_STATUSES)[number];
 
+export const EXPIRABLE_SWITCH_STATUSES = [
+  "proposed",
+  "accepted",
+  "launching"
+] as const satisfies readonly SwitchStatus[];
+
+export type ExpirableSwitchStatus = (typeof EXPIRABLE_SWITCH_STATUSES)[number];
+
 export interface SessionParticipant {
   id: string;
   displayName: string;
@@ -159,7 +167,7 @@ export function confirmJoinedProvider(
 }
 
 export function expireSwitchProposal(proposal: SwitchProposal, now: Date): SwitchProposal {
-  if (!["proposed", "accepted", "launching"].includes(proposal.status)) {
+  if (!isExpirableSwitchStatus(proposal.status)) {
     return proposal;
   }
 
@@ -180,9 +188,15 @@ function ensureMutableProposal(proposal: SwitchProposal, now: Date): void {
     throw new Error("Switch proposal has expired.");
   }
 
-  if (!["proposed", "accepted", "launching"].includes(proposal.status)) {
+  if (!isExpirableSwitchStatus(proposal.status)) {
     throw new Error(`Switch proposal is already ${proposal.status}.`);
   }
+}
+
+export function isExpirableSwitchStatus(
+  status: SwitchStatus
+): status is ExpirableSwitchStatus {
+  return (EXPIRABLE_SWITCH_STATUSES as readonly SwitchStatus[]).includes(status);
 }
 
 function ensureParticipant(session: CallSession, participantId: string): void {

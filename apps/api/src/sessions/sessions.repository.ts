@@ -16,6 +16,7 @@ export interface ProposalLookup {
 export interface SessionsRepository {
   createSession(storedSession: StoredSession): Promise<StoredSession>;
   getSession(sessionId: string): Promise<StoredSession | undefined>;
+  listExpirableProposals(): Promise<ProposalLookup[]>;
   addProposal(proposal: SwitchProposal): Promise<StoredSession>;
   getProposal(proposalId: string): Promise<ProposalLookup | undefined>;
   updateProposal(proposal: SwitchProposal): Promise<StoredSession>;

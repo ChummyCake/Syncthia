@@ -6,6 +6,7 @@ import {
 import { Injectable } from "@nestjs/common";
 import {
   CallSession,
+  EXPIRABLE_SWITCH_STATUSES,
   Provider,
   ProviderEndpoint,
   SwitchProposal,
@@ -89,6 +90,24 @@ export class PrismaSessionsRepository implements SessionsRepository {
   async getSession(sessionId: string): Promise<StoredSession | undefined> {
     const session = await this.loadSession(this.prisma, sessionId);
     return session ? toStoredSession(session) : undefined;
+  }
+
+  async listExpirableProposals(): Promise<ProposalLookup[]> {
+    const proposals = await this.prisma.switchProposal.findMany({
+      where: {
+        status: {
+          in: EXPIRABLE_SWITCH_STATUSES.map(fromSwitchStatus)
+        }
+      },
+      select: { id: true },
+      orderBy: { expiresAt: "asc" }
+    });
+
+    const lookups = await Promise.all(
+      proposals.map((proposal) => this.getProposal(proposal.id))
+    );
+
+    return lookups.filter((lookup): lookup is ProposalLookup => Boolean(lookup));
   }
 
   async addProposal(proposal: SwitchProposal): Promise<StoredSession> {

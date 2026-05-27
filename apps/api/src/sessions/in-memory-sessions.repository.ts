@@ -1,5 +1,9 @@
 import { Injectable } from "@nestjs/common";
-import { CallSession, SwitchProposal } from "@syncthia/shared";
+import {
+  CallSession,
+  SwitchProposal,
+  isExpirableSwitchStatus
+} from "@syncthia/shared";
 import {
   ProposalLookup,
   SessionsRepository,
@@ -17,6 +21,20 @@ export class InMemorySessionsRepository implements SessionsRepository {
 
   async getSession(sessionId: string): Promise<StoredSession | undefined> {
     return this.sessions.get(sessionId);
+  }
+
+  async listExpirableProposals(): Promise<ProposalLookup[]> {
+    return [...this.sessions.values()]
+      .flatMap((storedSession) =>
+        storedSession.proposals
+          .filter((proposal) => isExpirableSwitchStatus(proposal.status))
+          .map((proposal) => ({ storedSession, proposal }))
+      )
+      .sort(
+        (left, right) =>
+          new Date(left.proposal.expiresAt).getTime() -
+          new Date(right.proposal.expiresAt).getTime()
+      );
   }
 
   async addProposal(proposal: SwitchProposal): Promise<StoredSession> {

@@ -76,6 +76,12 @@ describeDb("PrismaSessionsRepository", () => {
     });
 
     await repository.addProposal(proposal);
+    expect(
+      (await repository.listExpirableProposals()).map(
+        (lookup) => lookup.proposal.id
+      )
+    ).toEqual([proposal.id]);
+
     const proposedLookup = await repository.getProposal(proposal.id);
 
     expect(proposedLookup?.proposal).toMatchObject({
@@ -136,6 +142,7 @@ describeDb("PrismaSessionsRepository", () => {
       "switch-lifecycle-u1",
       "switch-lifecycle-u2"
     ]);
+    expect(await repository.listExpirableProposals()).toEqual([]);
   });
 });
 
