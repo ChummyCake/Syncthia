@@ -154,7 +154,7 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
       await this.sessionsRepository.addProposal(proposal);
       this.scheduleExpiry(proposal.id, new Date(proposal.expiresAt));
       this.events.emitSwitchProposed(proposal);
-      this.notifications.queueSwitchNotification(
+      await this.notifications.queueSwitchNotification(
         proposal.recipientId,
         "switch.proposed",
         proposal
@@ -198,7 +198,7 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
 
       if (launchTarget) {
         this.events.emitSwitchLaunching(updatedProposal, launchTarget);
-        this.notifications.queueSwitchNotification(
+        await this.notifications.queueSwitchNotification(
           updatedProposal.requesterId,
           "switch.launching",
           updatedProposal
@@ -352,7 +352,7 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
       if (expiredProposal.status === "expired" && proposal.status !== "expired") {
         await this.sessionsRepository.updateProposal(expiredProposal);
         this.events.emitSwitchExpired(expiredProposal);
-        this.notifications.queueSwitchNotification(
+        await this.notifications.queueSwitchNotification(
           expiredProposal.requesterId,
           "switch.expired",
           expiredProposal

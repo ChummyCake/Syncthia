@@ -56,7 +56,7 @@ export default function HomeScreen() {
 
       setSessionResponse(response);
       setCurrentParticipantId(you);
-      void registerDeviceForPush(you);
+      void registerDeviceForPush(you).catch(() => undefined);
       router.push({
         pathname: "/session/[sessionId]",
         params: {

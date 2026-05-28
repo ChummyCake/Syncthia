@@ -229,6 +229,7 @@ function requireProposal(storedSession: StoredSession, proposalId: string) {
 }
 
 async function cleanDatabase(prisma: PrismaService) {
+  await prisma.notificationJob.deleteMany();
   await prisma.joinConfirmation.deleteMany();
   await prisma.switchProposal.deleteMany();
   await prisma.providerEndpoint.deleteMany();

@@ -14,7 +14,7 @@ export async function registerDeviceForPush(userId: string): Promise<void> {
   }
 
   const token = await Notifications.getExpoPushTokenAsync();
-  await fetch(`${API_URL}/me/devices`, {
+  const response = await fetch(`${API_URL}/me/devices`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -25,4 +25,9 @@ export async function registerDeviceForPush(userId: string): Promise<void> {
       platform: Platform.OS
     })
   });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Device registration failed with ${response.status}`);
+  }
 }

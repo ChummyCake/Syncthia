@@ -34,9 +34,9 @@ export class MeService {
     };
   }
 
-  registerDevice(dto: RegisterDeviceDto) {
+  async registerDevice(dto: RegisterDeviceDto) {
     return {
-      device: this.notifications.registerDevice(dto)
+      device: await this.notifications.registerDevice(dto)
     };
   }
 }

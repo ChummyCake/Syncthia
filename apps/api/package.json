@@ -8,7 +8,7 @@
     "build": "nest build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:integration": "vitest run src/sessions/prisma-sessions.repository.integration.test.ts",
+    "test:integration": "vitest run src/sessions/prisma-sessions.repository.integration.test.ts && vitest run src/notifications/notifications.service.integration.test.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:format": "prisma format",

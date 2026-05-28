@@ -1,6 +1,6 @@
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -32,6 +32,7 @@ import { ActionButton } from "../../src/components/ActionButton";
 import { ProviderPicker } from "../../src/components/ProviderPicker";
 import { RecommendationList } from "../../src/components/RecommendationList";
 import { useSessionSocket } from "../../src/hooks/use-session-socket";
+import { registerDeviceForPush } from "../../src/notifications/register-device";
 import { launchProvider } from "../../src/providers/provider-launch";
 import { useSessionStore } from "../../src/store/session-store";
 import { colors, spacing } from "../../src/theme";
@@ -70,6 +71,7 @@ export default function SessionScreen() {
     () => createEndpointDrafts([])
   );
   const [savingEndpoint, setSavingEndpoint] = useState<Provider>();
+  const lastRegisteredParticipantId = useRef<string>();
 
   useEffect(() => {
     if (params.participantId) {
@@ -103,6 +105,18 @@ export default function SessionScreen() {
   useEffect(() => {
     setEndpointDrafts(createEndpointDrafts(providerEndpoints));
   }, [providerEndpoints]);
+
+  useEffect(() => {
+    if (
+      !currentParticipantId ||
+      lastRegisteredParticipantId.current === currentParticipantId
+    ) {
+      return;
+    }
+
+    lastRegisteredParticipantId.current = currentParticipantId;
+    void registerDeviceForPush(currentParticipantId).catch(() => undefined);
+  }, [currentParticipantId]);
 
   const currentParticipant = session?.participants.find(
     (participant) => participant.id === currentParticipantId
