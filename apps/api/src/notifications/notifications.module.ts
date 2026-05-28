@@ -2,6 +2,7 @@ import { Global, Module } from "@nestjs/common";
 import { PrismaModule } from "../prisma/prisma.module";
 import { ExpoNotificationSender } from "./expo-notification-sender";
 import { NOTIFICATION_SENDER } from "./notification-sender";
+import { NotificationsDispatcher } from "./notifications.dispatcher";
 import { NotificationsService } from "./notifications.service";
 import { NotificationsWorker } from "./notifications.worker";
 
@@ -10,6 +11,7 @@ import { NotificationsWorker } from "./notifications.worker";
   imports: [PrismaModule],
   providers: [
     ExpoNotificationSender,
+    NotificationsDispatcher,
     NotificationsService,
     NotificationsWorker,
     {
@@ -17,6 +19,6 @@ import { NotificationsWorker } from "./notifications.worker";
       useExisting: ExpoNotificationSender
     }
   ],
-  exports: [NotificationsService, NotificationsWorker]
+  exports: [NotificationsDispatcher, NotificationsService, NotificationsWorker]
 })
 export class NotificationsModule {}

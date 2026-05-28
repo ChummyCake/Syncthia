@@ -1,5 +1,6 @@
 import { createSwitchProposal } from "@syncthia/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { NotificationsDispatcher } from "../notifications/notifications.dispatcher";
 import { NotificationsService } from "../notifications/notifications.service";
 import { InMemorySessionsRepository } from "./in-memory-sessions.repository";
 import { SessionEventsGateway } from "./session-events.gateway";
@@ -21,13 +22,19 @@ function createService(repository = new InMemorySessionsRepository()) {
     queueSwitchNotification: vi.fn()
   } as unknown as NotificationsService;
 
+  const notificationsDispatcher = {
+    requestDrain: vi.fn(async () => undefined)
+  } as unknown as NotificationsDispatcher;
+
   return {
     events,
     notifications,
+    notificationsDispatcher,
     repository,
     service: new SessionsService(
       events,
       notifications,
+      notificationsDispatcher,
       repository
     )
   };
@@ -88,7 +95,7 @@ describe("SessionsService", () => {
   });
 
   it("switches provider only after accept and both join confirmations", async () => {
-    const { service, events } = createService();
+    const { service, events, notificationsDispatcher } = createService();
     const created = await service.createSession({
       activeProvider: "messenger",
       participants: [
@@ -124,13 +131,20 @@ describe("SessionsService", () => {
     expect(secondJoin.session.activeProvider).toBe("discord");
     expect(secondJoin.proposal.status).toBe("confirmed");
     expect(events.emitSwitchConfirmed).toHaveBeenCalledOnce();
+    expect(notificationsDispatcher.requestDrain).toHaveBeenCalledTimes(2);
   });
 
   it("expires persisted overdue proposals on startup", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-28T01:00:02.000Z"));
 
-    const { service, repository, events, notifications } = createService();
+    const {
+      service,
+      repository,
+      events,
+      notifications,
+      notificationsDispatcher
+    } = createService();
     const proposal = await seedProposal(repository, {
       id: "restart-overdue",
       now: new Date("2026-05-28T01:00:00.000Z"),
@@ -152,6 +166,7 @@ describe("SessionsService", () => {
       "switch.expired",
       expect.objectContaining({ id: proposal.id, status: "expired" })
     );
+    expect(notificationsDispatcher.requestDrain).toHaveBeenCalledOnce();
 
     service.onModuleDestroy();
     vi.useRealTimers();

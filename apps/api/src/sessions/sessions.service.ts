@@ -27,6 +27,7 @@ import {
   ParticipantActionDto,
   UpdateProviderEndpointDto
 } from "./dto";
+import { NotificationsDispatcher } from "../notifications/notifications.dispatcher";
 import { NotificationsService } from "../notifications/notifications.service";
 import { SessionEventsGateway } from "./session-events.gateway";
 import {
@@ -44,6 +45,7 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly events: SessionEventsGateway,
     private readonly notifications: NotificationsService,
+    private readonly notificationsDispatcher: NotificationsDispatcher,
     @Inject(SESSIONS_REPOSITORY)
     private readonly sessionsRepository: SessionsRepository
   ) {}
@@ -159,6 +161,7 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
         "switch.proposed",
         proposal
       );
+      this.requestNotificationDrain();
 
       return {
         proposal,
@@ -203,6 +206,7 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
           "switch.launching",
           updatedProposal
         );
+        this.requestNotificationDrain();
       }
 
       return {
@@ -357,6 +361,7 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
           "switch.expired",
           expiredProposal
         );
+        this.requestNotificationDrain();
       }
     } catch {
       return;
@@ -381,5 +386,9 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
     }
 
     return new BadRequestException(error instanceof Error ? error.message : "Invalid request.");
+  }
+
+  private requestNotificationDrain() {
+    void this.notificationsDispatcher.requestDrain();
   }
 }
