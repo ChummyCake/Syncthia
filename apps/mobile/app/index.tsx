@@ -4,6 +4,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,11 +12,17 @@ import {
   View
 } from "react-native";
 import { router } from "expo-router";
-import { Provider, recommendProviders } from "@syncthia/shared";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  PROVIDER_LABELS,
+  PROVIDERS,
+  Provider,
+  recommendProviders
+} from "@syncthia/shared";
 import { ActionButton } from "../src/components/ActionButton";
 import { ProviderPicker } from "../src/components/ProviderPicker";
 import { RecommendationList } from "../src/components/RecommendationList";
-import { createSession } from "../src/lib/api";
+import { createSession, updateProviderPreferences } from "../src/lib/api";
 import { registerDeviceForPush } from "../src/notifications/register-device";
 import { useSessionStore } from "../src/store/session-store";
 import { colors, spacing } from "../src/theme";
@@ -24,7 +31,11 @@ import { createLocalId } from "../src/utils/id";
 const signals = ["simple", "long_call"] as const;
 
 export default function HomeScreen() {
+  const [localUserId] = useState(() => createLocalId("user"));
   const [activeProvider, setActiveProvider] = useState<Provider>("messenger");
+  const [installedProviders, setInstalledProviders] = useState<Provider[]>([
+    ...PROVIDERS
+  ]);
   const [yourName, setYourName] = useState("You");
   const [partnerName, setPartnerName] = useState("Partner");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,14 +46,41 @@ export default function HomeScreen() {
     () =>
       recommendProviders({
         signals: [...signals],
+        preferredProvider: activeProvider,
+        installedProviders,
         activeProvider
       }),
-    [activeProvider]
+    [activeProvider, installedProviders]
   );
+
+  function toggleInstalledProvider(provider: Provider) {
+    setInstalledProviders((providers) => {
+      const next = providers.includes(provider)
+        ? providers.filter((candidate) => candidate !== provider)
+        : [...providers, provider];
+
+      if (next.length === 0) {
+        return providers;
+      }
+
+      if (!next.includes(activeProvider)) {
+        setActiveProvider(next[0]);
+      }
+
+      return next;
+    });
+  }
+
+  function handleActiveProviderChange(provider: Provider) {
+    setActiveProvider(provider);
+    setInstalledProviders((providers) =>
+      providers.includes(provider) ? providers : [...providers, provider]
+    );
+  }
 
   async function handleCreateSession() {
     setIsSubmitting(true);
-    const you = createLocalId("user");
+    const you = localUserId;
     const partner = createLocalId("user");
 
     try {
@@ -57,6 +95,12 @@ export default function HomeScreen() {
       setSessionResponse(response);
       setCurrentParticipantId(you);
       void registerDeviceForPush(you).catch(() => undefined);
+      void updateProviderPreferences({
+        userId: you,
+        preferredProvider: activeProvider,
+        installedProviders,
+        signals: [...signals]
+      }).catch(() => undefined);
       router.push({
         pathname: "/session/[sessionId]",
         params: {
@@ -100,7 +144,44 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Active provider</Text>
-          <ProviderPicker value={activeProvider} onChange={setActiveProvider} />
+          <ProviderPicker
+            value={activeProvider}
+            onChange={handleActiveProviderChange}
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Installed apps</Text>
+          <View style={styles.installedGrid}>
+            {PROVIDERS.map((provider) => {
+              const selected = installedProviders.includes(provider);
+              return (
+                <Pressable
+                  key={provider}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: selected }}
+                  onPress={() => toggleInstalledProvider(provider)}
+                  style={[
+                    styles.installedOption,
+                    selected && { borderColor: colors[provider] }
+                  ]}
+                >
+                  <Ionicons
+                    name={selected ? "checkmark-circle" : "ellipse-outline"}
+                    size={20}
+                    color={selected ? colors[provider] : colors.muted}
+                  />
+                  <Text
+                    adjustsFontSizeToFit
+                    numberOfLines={1}
+                    style={styles.installedText}
+                  >
+                    {PROVIDER_LABELS[provider]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -145,6 +226,30 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.text,
     fontSize: 16,
+    fontWeight: "800"
+  },
+  installedGrid: {
+    flexDirection: "row",
+    gap: spacing.sm
+  },
+  installedOption: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    gap: spacing.xs,
+    justifyContent: "center",
+    minHeight: 62,
+    paddingHorizontal: spacing.sm
+  },
+  installedText: {
+    alignSelf: "stretch",
+    textAlign: "center",
+    color: colors.text,
+    flexShrink: 1,
+    fontSize: 13,
     fontWeight: "800"
   },
   input: {

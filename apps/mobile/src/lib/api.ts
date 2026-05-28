@@ -1,5 +1,6 @@
 import {
   CallSession,
+  PreferenceSignal,
   Provider,
   ProviderEndpoint,
   ProviderLaunchTarget,
@@ -46,6 +47,27 @@ export async function updateProviderEndpoint(input: {
       })
     }
   );
+}
+
+export async function updateProviderPreferences(input: {
+  userId: string;
+  preferredProvider?: Provider;
+  installedProviders?: Provider[];
+  signals?: PreferenceSignal[];
+}): Promise<{
+  preferences: {
+    userId: string;
+    preferredProvider?: Provider;
+    installedProviders?: Provider[];
+    signals: PreferenceSignal[];
+    updatedAt: string;
+  };
+  recommendations: ProviderRecommendation[];
+}> {
+  return apiFetch("/me/provider-preferences", {
+    method: "PATCH",
+    body: JSON.stringify(input)
+  });
 }
 
 export async function createSwitchProposal(input: {
