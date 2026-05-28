@@ -76,7 +76,8 @@ describeDb("NotificationsService", () => {
       type: "switch.proposed",
       proposalId: proposal.id,
       deviceCount: 2,
-      status: "queued"
+      status: "queued",
+      attempts: 0
     });
 
     const persisted = await prisma.notificationJob.findUnique({
@@ -88,6 +89,48 @@ describeDb("NotificationsService", () => {
       sessionId: proposal.sessionId,
       toProvider: "discord"
     });
+
+    const queued = await service.listQueuedNotifications();
+    expect(queued).toHaveLength(1);
+    expect(queued[0].job.id).toBe(job.id);
+    expect(queued[0].devices.map((device) => device.pushToken)).toEqual([
+      "ExponentPushToken[one]",
+      "ExponentPushToken[two]"
+    ]);
+  });
+
+  it("marks notification jobs as sent or failed", async () => {
+    const proposal = createProposal("proposal-notify-2", "notify-u3");
+    const sentJob = await service.queueSwitchNotification(
+      "notify-u3",
+      "switch.launching",
+      proposal
+    );
+    const failedJob = await service.queueSwitchNotification(
+      "notify-u3",
+      "switch.expired",
+      proposal
+    );
+
+    const sent = await service.markNotificationSent(sentJob.id);
+    const failed = await service.markNotificationFailed(
+      failedJob.id,
+      "Expo delivery failed."
+    );
+
+    expect(sent).toMatchObject({
+      id: sentJob.id,
+      status: "sent",
+      lastError: undefined
+    });
+    expect(sent.sentAt).toBeDefined();
+    expect(failed).toMatchObject({
+      id: failedJob.id,
+      status: "failed",
+      attempts: 1,
+      lastError: "Expo delivery failed."
+    });
+    await expect(service.listQueuedNotifications()).resolves.toEqual([]);
   });
 });
 

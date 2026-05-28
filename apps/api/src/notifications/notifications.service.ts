@@ -3,6 +3,13 @@ import { Device, NotificationJob as DbNotificationJob, Prisma } from "@prisma/cl
 import { SwitchProposal } from "@syncthia/shared";
 import { PrismaService } from "../prisma/prisma.service";
 
+export type NotificationJobType =
+  | "switch.proposed"
+  | "switch.launching"
+  | "switch.expired";
+
+export type NotificationJobStatus = "queued" | "sent" | "failed";
+
 export interface RegisterDeviceInput {
   userId: string;
   pushToken: string;
@@ -21,12 +28,21 @@ export interface DeviceRecord {
 export interface NotificationJob {
   id: string;
   recipientId: string;
-  type: "switch.proposed" | "switch.launching" | "switch.expired";
+  type: NotificationJobType;
   proposalId: string;
   deviceCount: number;
-  status: string;
+  payload: Prisma.JsonValue;
+  status: NotificationJobStatus;
+  attempts: number;
+  lastError?: string;
+  sentAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface QueuedNotificationDelivery {
+  job: NotificationJob;
+  devices: DeviceRecord[];
 }
 
 @Injectable()
@@ -64,7 +80,7 @@ export class NotificationsService {
 
   async queueSwitchNotification(
     recipientId: string,
-    type: NotificationJob["type"],
+    type: NotificationJobType,
     proposal: SwitchProposal
   ): Promise<NotificationJob> {
     const normalizedRecipientId = recipientId.trim();
@@ -83,6 +99,64 @@ export class NotificationsService {
         proposalId: proposal.id,
         deviceCount,
         payload: proposal as unknown as Prisma.InputJsonValue
+      }
+    });
+
+    return toNotificationJob(job);
+  }
+
+  async listQueuedNotifications(limit = 25): Promise<QueuedNotificationDelivery[]> {
+    const jobs = await this.prisma.notificationJob.findMany({
+      where: { status: "queued" },
+      orderBy: { createdAt: "asc" },
+      take: Math.max(1, Math.min(limit, 100))
+    });
+    const recipientIds = [...new Set(jobs.map((job) => job.recipientId))];
+    const devices = await this.prisma.device.findMany({
+      where: {
+        userId: {
+          in: recipientIds
+        }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+    const devicesByUser = new Map<string, DeviceRecord[]>();
+
+    for (const device of devices) {
+      const records = devicesByUser.get(device.userId) ?? [];
+      records.push(toDeviceRecord(device));
+      devicesByUser.set(device.userId, records);
+    }
+
+    return jobs.map((job) => ({
+      job: toNotificationJob(job),
+      devices: devicesByUser.get(job.recipientId) ?? []
+    }));
+  }
+
+  async markNotificationSent(jobId: string): Promise<NotificationJob> {
+    const job = await this.prisma.notificationJob.update({
+      where: { id: jobId },
+      data: {
+        status: "sent",
+        sentAt: new Date(),
+        lastError: null
+      }
+    });
+
+    return toNotificationJob(job);
+  }
+
+  async markNotificationFailed(
+    jobId: string,
+    errorMessage: string
+  ): Promise<NotificationJob> {
+    const job = await this.prisma.notificationJob.update({
+      where: { id: jobId },
+      data: {
+        status: "failed",
+        attempts: { increment: 1 },
+        lastError: errorMessage.slice(0, 1_000)
       }
     });
 
@@ -119,7 +193,11 @@ function toNotificationJob(job: DbNotificationJob): NotificationJob {
     type: job.type as NotificationJob["type"],
     proposalId: job.proposalId,
     deviceCount: job.deviceCount,
-    status: job.status,
+    payload: job.payload,
+    status: job.status as NotificationJobStatus,
+    attempts: job.attempts,
+    lastError: job.lastError ?? undefined,
+    sentAt: job.sentAt?.toISOString(),
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString()
   };
