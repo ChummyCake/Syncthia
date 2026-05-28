@@ -1,7 +1,7 @@
 import { IsArray, IsIn, IsNotEmpty, IsOptional, IsString } from "class-validator";
 import { PROVIDERS, Provider } from "@syncthia/shared";
 
-const SIGNALS = [
+export const PREFERENCE_SIGNALS = [
   "simple",
   "long_call",
   "streaming",
@@ -28,8 +28,8 @@ export class UpdateProviderPreferencesDto {
 
   @IsOptional()
   @IsArray()
-  @IsIn(SIGNALS, { each: true })
-  signals?: (typeof SIGNALS)[number][];
+  @IsIn(PREFERENCE_SIGNALS, { each: true })
+  signals?: (typeof PREFERENCE_SIGNALS)[number][];
 }
 
 export class RegisterDeviceDto {

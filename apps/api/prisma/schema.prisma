@@ -24,14 +24,15 @@ enum SwitchStatus {
 }
 
 model User {
-  id               String               @id @default(uuid())
-  displayName      String
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
-  devices          Device[]
-  notificationJobs NotificationJob[]
-  providerProfiles ProviderProfile[]
-  participantLinks SessionParticipant[]
+  id                 String               @id @default(uuid())
+  displayName        String
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  devices            Device[]
+  notificationJobs   NotificationJob[]
+  providerPreference ProviderPreference?
+  providerProfiles   ProviderProfile[]
+  participantLinks   SessionParticipant[]
 }
 
 model Device {
@@ -79,6 +80,17 @@ model ProviderProfile {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, provider])
+}
+
+model ProviderPreference {
+  id                 String     @id @default(uuid())
+  userId             String     @unique
+  preferredProvider  Provider?
+  installedProviders Provider[]
+  signals            String[]
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model CallSession {

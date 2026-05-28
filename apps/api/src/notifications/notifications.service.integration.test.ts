@@ -162,6 +162,7 @@ async function cleanDatabase(prisma: PrismaService) {
   await prisma.auditEvent.deleteMany();
   await prisma.sessionParticipant.deleteMany();
   await prisma.callSession.deleteMany();
+  await prisma.providerPreference.deleteMany();
   await prisma.providerProfile.deleteMany();
   await prisma.device.deleteMany();
   await prisma.user.deleteMany();
