@@ -6,6 +6,7 @@ import {
   Alert,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -32,6 +33,7 @@ import { ActionButton } from "../../src/components/ActionButton";
 import { ProviderPicker } from "../../src/components/ProviderPicker";
 import { RecommendationList } from "../../src/components/RecommendationList";
 import { useSessionSocket } from "../../src/hooks/use-session-socket";
+import { buildSessionInviteUrl } from "../../src/invites/session-invite";
 import { registerDeviceForPush } from "../../src/notifications/register-device";
 import { launchProvider } from "../../src/providers/provider-launch";
 import { useSessionStore } from "../../src/store/session-store";
@@ -136,10 +138,19 @@ export default function SessionScreen() {
     [reason, session?.activeProvider]
   );
 
-  async function handleCopyInvite(participantId: string) {
-    const url = `syncthia://session/${sessionId}?participantId=${participantId}`;
-    await Clipboard.setStringAsync(url);
-    Alert.alert("Invite copied", url);
+  async function handleShareInvite(participantId: string, displayName: string) {
+    const url = buildSessionInviteUrl(sessionId, participantId);
+
+    try {
+      await Share.share({
+        title: "Syncthia invite",
+        message: `Join this Syncthia call as ${displayName}: ${url}`,
+        url
+      });
+    } catch {
+      await Clipboard.setStringAsync(url);
+      Alert.alert("Invite copied", url);
+    }
   }
 
   async function handleCreateProposal() {
@@ -216,7 +227,7 @@ export default function SessionScreen() {
       });
       upsertProposal(response.proposal);
       if (response.launchTarget) {
-        await launchProvider(response.launchTarget);
+        await openProvider(response.launchTarget);
       }
     } catch (error) {
       Alert.alert("Switch not accepted", error instanceof Error ? error.message : "Unknown error");
@@ -252,7 +263,7 @@ export default function SessionScreen() {
     const endpoint = providerEndpoints.find(
       (candidate) => candidate.provider === activeProposal.toProvider
     );
-    await launchProvider(buildProviderLaunchTarget(activeProposal.toProvider, endpoint));
+    await openProvider(buildProviderLaunchTarget(activeProposal.toProvider, endpoint));
   }
 
   async function handleConfirmJoined() {
@@ -334,9 +345,11 @@ export default function SessionScreen() {
             <ActionButton
               key={participant.id}
               label={participant.displayName}
-              icon="copy"
+              icon="share-social"
               tone="neutral"
-              onPress={() => handleCopyInvite(participant.id)}
+              onPress={() =>
+                handleShareInvite(participant.id, participant.displayName)
+              }
             />
           ))}
         </View>
@@ -506,6 +519,17 @@ function createEndpointDrafts(
 function optionalText(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
+}
+
+async function openProvider(target: ReturnType<typeof buildProviderLaunchTarget>) {
+  try {
+    await launchProvider(target);
+  } catch (error) {
+    Alert.alert(
+      `${target.label} could not open`,
+      error instanceof Error ? error.message : target.instructions
+    );
+  }
 }
 
 const styles = StyleSheet.create({
