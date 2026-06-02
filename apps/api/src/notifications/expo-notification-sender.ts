@@ -93,6 +93,7 @@ export class ExpoNotificationSender implements NotificationSender {
       body: content.body,
       data: {
         type: delivery.job.type,
+        recipientId: delivery.job.recipientId,
         proposalId: delivery.job.proposalId,
         sessionId: proposal.sessionId,
         fromProvider: proposal.fromProvider,

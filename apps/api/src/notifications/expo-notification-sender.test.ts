@@ -43,6 +43,7 @@ describe("ExpoNotificationSender", () => {
         body: "Switch to Discord: streaming",
         data: expect.objectContaining({
           type: "switch.proposed",
+          recipientId: "u2",
           proposalId: "proposal-1",
           sessionId: "session-1",
           fromProvider: "messenger",
