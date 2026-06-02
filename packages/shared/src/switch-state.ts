@@ -101,6 +101,10 @@ export function acceptSwitchProposal(
   ensureParticipant(session, participantId);
   ensureMutableProposal(proposal, now);
 
+  if (proposal.acceptedBy.includes(participantId)) {
+    throw new Error("Participant has already accepted this switch proposal.");
+  }
+
   const acceptedBy = unique([...proposal.acceptedBy, participantId]);
   const requiredParticipantIds = session.participants.map((participant) => participant.id);
   const allAccepted = requiredParticipantIds.every((id) => acceptedBy.includes(id));

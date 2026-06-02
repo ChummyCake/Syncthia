@@ -99,4 +99,26 @@ describe("switch state machine", () => {
       )
     ).toThrow("Cannot confirm joined");
   });
+
+  it("blocks duplicate acceptance from the requester", () => {
+    const proposal = createSwitchProposal({
+      id: "proposal-3",
+      session,
+      toProvider: "discord",
+      reason: "streaming",
+      requesterId: "u1",
+      recipientId: "u2",
+      now: new Date("2026-05-23T00:00:00.000Z"),
+      ttlMs: 60_000
+    });
+
+    expect(() =>
+      acceptSwitchProposal(
+        session,
+        proposal,
+        "u1",
+        new Date("2026-05-23T00:00:05.000Z")
+      )
+    ).toThrow("already accepted");
+  });
 });

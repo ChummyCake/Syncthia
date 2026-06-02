@@ -134,6 +134,35 @@ describe("SessionsService", () => {
     expect(notificationsDispatcher.requestDrain).toHaveBeenCalledTimes(2);
   });
 
+  it("rejects duplicate acceptance from the requester", async () => {
+    const { service, repository, events, notificationsDispatcher } = createService();
+    const created = await service.createSession({
+      activeProvider: "messenger",
+      participants: [
+        { id: "u1", displayName: "Ava" },
+        { id: "u2", displayName: "Ben" }
+      ]
+    });
+
+    const proposed = await service.createSwitchProposal(created.session.id, {
+      requesterId: "u1",
+      recipientId: "u2",
+      toProvider: "discord",
+      reason: "streaming"
+    });
+
+    await expect(
+      service.acceptProposal(proposed.proposal.id, { participantId: "u1" })
+    ).rejects.toThrow("already accepted");
+
+    const lookup = await repository.getProposal(proposed.proposal.id);
+    expect(lookup?.proposal.status).toBe("proposed");
+    expect(lookup?.proposal.acceptedBy).toEqual(["u1"]);
+    expect(events.emitSwitchAccepted).not.toHaveBeenCalled();
+    expect(events.emitSwitchLaunching).not.toHaveBeenCalled();
+    expect(notificationsDispatcher.requestDrain).toHaveBeenCalledOnce();
+  });
+
   it("expires persisted overdue proposals on startup", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-28T01:00:02.000Z"));
