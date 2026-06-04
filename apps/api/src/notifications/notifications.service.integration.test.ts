@@ -77,7 +77,8 @@ describeDb("NotificationsService", () => {
       proposalId: proposal.id,
       deviceCount: 2,
       status: "queued",
-      attempts: 0
+      attempts: 0,
+      nextAttemptAt: undefined
     });
 
     const persisted = await prisma.notificationJob.findUnique({
@@ -99,7 +100,7 @@ describeDb("NotificationsService", () => {
     ]);
   });
 
-  it("marks notification jobs as sent or failed", async () => {
+  it("marks notification jobs as sent, retrying, or terminally failed", async () => {
     const proposal = createProposal("proposal-notify-2", "notify-u3");
     const sentJob = await service.queueSwitchNotification(
       "notify-u3",
@@ -113,7 +114,7 @@ describeDb("NotificationsService", () => {
     );
 
     const sent = await service.markNotificationSent(sentJob.id);
-    const failed = await service.markNotificationFailed(
+    const retrying = await service.markNotificationFailed(
       failedJob.id,
       "Expo delivery failed."
     );
@@ -124,13 +125,52 @@ describeDb("NotificationsService", () => {
       lastError: undefined
     });
     expect(sent.sentAt).toBeDefined();
-    expect(failed).toMatchObject({
+    expect(sent.nextAttemptAt).toBeUndefined();
+    expect(retrying).toMatchObject({
       id: failedJob.id,
-      status: "failed",
+      status: "queued",
       attempts: 1,
       lastError: "Expo delivery failed."
     });
+    expect(retrying.nextAttemptAt).toBeDefined();
     await expect(service.listQueuedNotifications()).resolves.toEqual([]);
+
+    await prisma.notificationJob.update({
+      where: { id: failedJob.id },
+      data: { nextAttemptAt: new Date(Date.now() - 1_000) }
+    });
+
+    const queued = await service.listQueuedNotifications();
+    expect(queued).toHaveLength(1);
+    expect(queued[0].job).toMatchObject({
+      id: failedJob.id,
+      status: "queued",
+      attempts: 1
+    });
+
+    const secondRetry = await service.markNotificationFailed(
+      failedJob.id,
+      "Expo delivery still failed."
+    );
+    expect(secondRetry).toMatchObject({
+      id: failedJob.id,
+      status: "queued",
+      attempts: 2,
+      lastError: "Expo delivery still failed."
+    });
+    expect(secondRetry.nextAttemptAt).toBeDefined();
+
+    const terminalFailure = await service.markNotificationFailed(
+      failedJob.id,
+      "Expo delivery finally failed."
+    );
+    expect(terminalFailure).toMatchObject({
+      id: failedJob.id,
+      status: "failed",
+      attempts: 3,
+      lastError: "Expo delivery finally failed."
+    });
+    expect(terminalFailure.nextAttemptAt).toBeUndefined();
   });
 });
 

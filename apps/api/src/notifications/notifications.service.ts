@@ -10,6 +10,10 @@ export type NotificationJobType =
 
 export type NotificationJobStatus = "queued" | "sent" | "failed";
 
+export const MAX_NOTIFICATION_ATTEMPTS = 3;
+
+const NOTIFICATION_RETRY_DELAYS_MS = [60_000, 5 * 60_000] as const;
+
 export interface RegisterDeviceInput {
   userId: string;
   pushToken: string;
@@ -35,6 +39,7 @@ export interface NotificationJob {
   status: NotificationJobStatus;
   attempts: number;
   lastError?: string;
+  nextAttemptAt?: string;
   sentAt?: string;
   createdAt: string;
   updatedAt: string;
@@ -106,9 +111,13 @@ export class NotificationsService {
   }
 
   async listQueuedNotifications(limit = 25): Promise<QueuedNotificationDelivery[]> {
+    const now = new Date();
     const jobs = await this.prisma.notificationJob.findMany({
-      where: { status: "queued" },
-      orderBy: { createdAt: "asc" },
+      where: {
+        status: "queued",
+        OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }]
+      },
+      orderBy: [{ nextAttemptAt: "asc" }, { createdAt: "asc" }],
       take: Math.max(1, Math.min(limit, 100))
     });
     const recipientIds = [...new Set(jobs.map((job) => job.recipientId))];
@@ -134,13 +143,38 @@ export class NotificationsService {
     }));
   }
 
+  async getNextQueuedNotificationDueAt(): Promise<string | undefined> {
+    const immediateJob = await this.prisma.notificationJob.findFirst({
+      where: {
+        status: "queued",
+        nextAttemptAt: null
+      },
+      select: { id: true }
+    });
+    if (immediateJob) {
+      return new Date().toISOString();
+    }
+
+    const delayedJob = await this.prisma.notificationJob.findFirst({
+      where: {
+        status: "queued",
+        nextAttemptAt: { not: null }
+      },
+      orderBy: { nextAttemptAt: "asc" },
+      select: { nextAttemptAt: true }
+    });
+
+    return delayedJob?.nextAttemptAt?.toISOString();
+  }
+
   async markNotificationSent(jobId: string): Promise<NotificationJob> {
     const job = await this.prisma.notificationJob.update({
       where: { id: jobId },
       data: {
         status: "sent",
         sentAt: new Date(),
-        lastError: null
+        lastError: null,
+        nextAttemptAt: null
       }
     });
 
@@ -151,12 +185,22 @@ export class NotificationsService {
     jobId: string,
     errorMessage: string
   ): Promise<NotificationJob> {
+    const existing = await this.prisma.notificationJob.findUniqueOrThrow({
+      where: { id: jobId }
+    });
+    const attempts = existing.attempts + 1;
+    const shouldRetry = attempts < MAX_NOTIFICATION_ATTEMPTS;
+    const retryDelayMs =
+      NOTIFICATION_RETRY_DELAYS_MS[
+        Math.min(attempts - 1, NOTIFICATION_RETRY_DELAYS_MS.length - 1)
+      ];
     const job = await this.prisma.notificationJob.update({
       where: { id: jobId },
       data: {
-        status: "failed",
-        attempts: { increment: 1 },
-        lastError: errorMessage.slice(0, 1_000)
+        status: shouldRetry ? "queued" : "failed",
+        attempts,
+        lastError: errorMessage.slice(0, 1_000),
+        nextAttemptAt: shouldRetry ? new Date(Date.now() + retryDelayMs) : null
       }
     });
 
@@ -197,6 +241,7 @@ function toNotificationJob(job: DbNotificationJob): NotificationJob {
     status: job.status as NotificationJobStatus,
     attempts: job.attempts,
     lastError: job.lastError ?? undefined,
+    nextAttemptAt: job.nextAttemptAt?.toISOString(),
     sentAt: job.sentAt?.toISOString(),
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString()

@@ -1,9 +1,15 @@
 import { Logger } from "@nestjs/common";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { NotificationsDispatcher } from "./notifications.dispatcher";
+import type { NotificationsService } from "./notifications.service";
 import type { NotificationsWorker } from "./notifications.worker";
 
 describe("NotificationsDispatcher", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
   it("drains queued notification jobs on demand", async () => {
     const worker = {
       processQueuedJobs: vi.fn(async () => ({
@@ -12,7 +18,8 @@ describe("NotificationsDispatcher", () => {
         failed: 0
       }))
     } as unknown as NotificationsWorker;
-    const dispatcher = new NotificationsDispatcher(worker);
+    const notifications = createNotifications();
+    const dispatcher = new NotificationsDispatcher(worker, notifications);
 
     await dispatcher.requestDrain(10);
 
@@ -26,7 +33,8 @@ describe("NotificationsDispatcher", () => {
         throw new Error("Expo delivery failed.");
       })
     } as unknown as NotificationsWorker;
-    const dispatcher = new NotificationsDispatcher(worker);
+    const notifications = createNotifications();
+    const dispatcher = new NotificationsDispatcher(worker, notifications);
 
     await expect(dispatcher.requestDrain()).resolves.toBeUndefined();
     warn.mockRestore();
@@ -49,7 +57,8 @@ describe("NotificationsDispatcher", () => {
         }
       )
     } as unknown as NotificationsWorker;
-    const dispatcher = new NotificationsDispatcher(worker);
+    const notifications = createNotifications();
+    const dispatcher = new NotificationsDispatcher(worker, notifications);
 
     const firstDrain = dispatcher.requestDrain();
     void dispatcher.requestDrain();
@@ -61,4 +70,41 @@ describe("NotificationsDispatcher", () => {
       expect(worker.processQueuedJobs).toHaveBeenCalledTimes(2);
     });
   });
+
+  it("schedules a follow-up drain for the next delayed retry", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-04T00:00:00.000Z"));
+
+    const worker = {
+      processQueuedJobs: vi.fn(async () => ({
+        processed: 0,
+        sent: 0,
+        failed: 0
+      }))
+    } as unknown as NotificationsWorker;
+    const notifications = {
+      getNextQueuedNotificationDueAt: vi
+        .fn()
+        .mockResolvedValueOnce("2026-06-04T00:00:01.000Z")
+        .mockResolvedValueOnce(undefined)
+    } as unknown as NotificationsService;
+    const dispatcher = new NotificationsDispatcher(worker, notifications);
+
+    await dispatcher.requestDrain();
+    expect(worker.processQueuedJobs).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(worker.processQueuedJobs).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(worker.processQueuedJobs).toHaveBeenCalledTimes(2);
+
+    dispatcher.onModuleDestroy();
+  });
 });
+
+function createNotifications(): NotificationsService {
+  return {
+    getNextQueuedNotificationDueAt: vi.fn(async () => undefined)
+  } as unknown as NotificationsService;
+}

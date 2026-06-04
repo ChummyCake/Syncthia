@@ -49,23 +49,25 @@ model Device {
 }
 
 model NotificationJob {
-  id          String    @id @default(uuid())
-  recipientId String
-  type        String
-  proposalId  String
-  deviceCount Int
-  payload     Json
-  status      String    @default("queued")
-  attempts    Int       @default(0)
-  lastError   String?
-  sentAt      DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  recipient   User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  id            String    @id @default(uuid())
+  recipientId   String
+  type          String
+  proposalId    String
+  deviceCount   Int
+  payload       Json
+  status        String    @default("queued")
+  attempts      Int       @default(0)
+  lastError     String?
+  nextAttemptAt DateTime?
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  recipient     User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@index([recipientId, createdAt])
   @@index([proposalId])
   @@index([status, createdAt])
+  @@index([status, nextAttemptAt, createdAt])
 }
 
 model ProviderProfile {
