@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Get, Ip, Param, Patch, Post } from "@nestjs/common";
 import {
   CreateSessionDto,
   CreateSwitchProposalDto,
@@ -6,14 +6,35 @@ import {
   UpdateProviderEndpointDto
 } from "./dto";
 import { Provider } from "@syncthia/shared";
+import { RateLimitService } from "../rate-limit/rate-limit.service";
 import { SessionsService } from "./sessions.service";
+
+const CREATE_SESSION_LIMIT = {
+  name: "sessions.create",
+  limit: 20,
+  windowMs: 60_000
+};
+const SWITCH_PROPOSAL_LIMIT = {
+  name: "switch.propose",
+  limit: 12,
+  windowMs: 60_000
+};
+const SWITCH_ACTION_LIMIT = {
+  name: "switch.action",
+  limit: 40,
+  windowMs: 60_000
+};
 
 @Controller()
 export class SessionsController {
-  constructor(private readonly sessionsService: SessionsService) {}
+  constructor(
+    private readonly sessionsService: SessionsService,
+    private readonly rateLimits: RateLimitService
+  ) {}
 
   @Post("sessions")
-  createSession(@Body() dto: CreateSessionDto) {
+  createSession(@Body() dto: CreateSessionDto, @Ip() ip: string) {
+    this.rateLimits.assertAllowed(clientKey(ip), CREATE_SESSION_LIMIT);
     return this.sessionsService.createSession(dto);
   }
 
@@ -36,6 +57,10 @@ export class SessionsController {
     @Param("sessionId") sessionId: string,
     @Body() dto: CreateSwitchProposalDto
   ) {
+    this.rateLimits.assertAllowed(
+      participantKey(dto.requesterId),
+      SWITCH_PROPOSAL_LIMIT
+    );
     return this.sessionsService.createSwitchProposal(sessionId, dto);
   }
 
@@ -44,6 +69,7 @@ export class SessionsController {
     @Param("proposalId") proposalId: string,
     @Body() dto: ParticipantActionDto
   ) {
+    this.rateLimits.assertAllowed(participantKey(dto.participantId), SWITCH_ACTION_LIMIT);
     return this.sessionsService.acceptProposal(proposalId, dto);
   }
 
@@ -52,6 +78,7 @@ export class SessionsController {
     @Param("proposalId") proposalId: string,
     @Body() dto: ParticipantActionDto
   ) {
+    this.rateLimits.assertAllowed(participantKey(dto.participantId), SWITCH_ACTION_LIMIT);
     return this.sessionsService.rejectProposal(proposalId, dto);
   }
 
@@ -60,6 +87,15 @@ export class SessionsController {
     @Param("proposalId") proposalId: string,
     @Body() dto: ParticipantActionDto
   ) {
+    this.rateLimits.assertAllowed(participantKey(dto.participantId), SWITCH_ACTION_LIMIT);
     return this.sessionsService.confirmJoined(proposalId, dto);
   }
+}
+
+function clientKey(ip: string) {
+  return `ip:${ip || "unknown"}`;
+}
+
+function participantKey(participantId: string) {
+  return `participant:${participantId}`;
 }
