@@ -1,10 +1,9 @@
-export interface NotificationSessionRoute {
-  pathname: "/session/[sessionId]";
-  params: {
-    sessionId: string;
-    participantId?: string;
-  };
-}
+import {
+  SessionRoute,
+  buildSessionRoute
+} from "../navigation/session-route";
+
+export type NotificationSessionRoute = SessionRoute;
 
 export function notificationRouteFromData(
   data: unknown
@@ -21,13 +20,7 @@ export function notificationRouteFromData(
   const participantId =
     optionalString(data.recipientId) ?? optionalString(data.participantId);
 
-  return {
-    pathname: "/session/[sessionId]",
-    params: {
-      sessionId,
-      ...(participantId ? { participantId } : {})
-    }
-  };
+  return buildSessionRoute(sessionId, participantId);
 }
 
 function optionalString(value: unknown): string | undefined {
