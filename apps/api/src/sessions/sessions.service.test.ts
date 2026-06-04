@@ -128,6 +128,43 @@ describe("SessionsService", () => {
     );
   });
 
+  it("rejects unsafe or mismatched provider endpoint URLs", async () => {
+    const { service } = createService();
+    const created = await service.createSession({
+      activeProvider: "messenger",
+      participants: [
+        { id: "u1", displayName: "Ava" },
+        { id: "u2", displayName: "Ben" }
+      ]
+    });
+
+    await expect(
+      service.updateProviderEndpoint(created.session.id, "discord", {
+        webUrl: "javascript:alert(1)"
+      })
+    ).rejects.toThrow("Discord web URL must use https URLs.");
+    await expect(
+      service.updateProviderEndpoint(created.session.id, "discord", {
+        appUrl: "zalo://profile/u2"
+      })
+    ).rejects.toThrow("Discord app URL must use discord, or https URLs.");
+    await expect(
+      service.createSession({
+        activeProvider: "messenger",
+        participants: [
+          { id: "u3", displayName: "Cai" },
+          { id: "u4", displayName: "Dee" }
+        ],
+        providerEndpoints: [
+          {
+            provider: "zalo",
+            webUrl: "not a url"
+          }
+        ]
+      })
+    ).rejects.toThrow("Zalo web URL must be a valid URL.");
+  });
+
   it("switches provider only after accept and both join confirmations", async () => {
     const { service, events, notificationsDispatcher } = createService();
     const created = await service.createSession({

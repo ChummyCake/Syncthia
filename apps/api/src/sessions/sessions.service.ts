@@ -12,6 +12,7 @@ import {
   ProviderEndpoint,
   SwitchProposal,
   acceptSwitchProposal,
+  assertProviderEndpointUrl,
   assertProvider,
   buildProviderLaunchTarget,
   confirmJoinedProvider,
@@ -306,12 +307,36 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private normalizeProviderEndpoint(endpoint: ProviderEndpoint): ProviderEndpoint {
+    let provider: Provider;
+    try {
+      provider = assertProvider(endpoint.provider);
+    } catch (error) {
+      throw this.toBadRequest(error);
+    }
+
     return {
-      provider: endpoint.provider,
+      provider,
       handle: this.trimOptional(endpoint.handle),
-      appUrl: this.trimOptional(endpoint.appUrl),
-      webUrl: this.trimOptional(endpoint.webUrl)
+      appUrl: this.normalizeEndpointUrl(provider, "appUrl", endpoint.appUrl),
+      webUrl: this.normalizeEndpointUrl(provider, "webUrl", endpoint.webUrl)
     };
+  }
+
+  private normalizeEndpointUrl(
+    provider: Provider,
+    kind: "appUrl" | "webUrl",
+    value?: string
+  ) {
+    const trimmed = this.trimOptional(value);
+    if (!trimmed) {
+      return undefined;
+    }
+
+    try {
+      return assertProviderEndpointUrl(provider, kind, trimmed);
+    } catch (error) {
+      throw this.toBadRequest(error);
+    }
   }
 
   private trimOptional(value?: string) {
