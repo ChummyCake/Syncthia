@@ -60,6 +60,40 @@ describe("SessionsService", () => {
     expect(response.session.participants).toHaveLength(2);
   });
 
+  it("normalizes participant ids and display names when creating sessions", async () => {
+    const { service } = createService();
+
+    const response = await service.createSession({
+      activeProvider: "messenger",
+      participants: [
+        { id: " u1 ", displayName: " Ava " },
+        { id: "   ", displayName: " Ben " }
+      ]
+    });
+
+    expect(response.session.participants[0]).toEqual({
+      id: "u1",
+      displayName: "Ava"
+    });
+    expect(response.session.participants[1].id).toBeTruthy();
+    expect(response.session.participants[1].id).not.toBe("   ");
+    expect(response.session.participants[1].displayName).toBe("Ben");
+  });
+
+  it("rejects blank participant display names after trimming", async () => {
+    const { service } = createService();
+
+    await expect(
+      service.createSession({
+        activeProvider: "messenger",
+        participants: [
+          { id: "u1", displayName: "Ava" },
+          { id: "u2", displayName: "   " }
+        ]
+      })
+    ).rejects.toThrow("Participant display names are required.");
+  });
+
   it("updates provider endpoint launch details", async () => {
     const { service, events } = createService();
     const created = await service.createSession({
@@ -105,21 +139,22 @@ describe("SessionsService", () => {
     });
 
     const proposed = await service.createSwitchProposal(created.session.id, {
-      requesterId: "u1",
-      recipientId: "u2",
+      requesterId: " u1 ",
+      recipientId: " u2 ",
       toProvider: "discord",
-      reason: "streaming"
+      reason: " streaming "
     });
 
     const accepted = await service.acceptProposal(proposed.proposal.id, {
-      participantId: "u2"
+      participantId: " u2 "
     });
 
+    expect(proposed.proposal.reason).toBe("streaming");
     expect(accepted.proposal.status).toBe("launching");
     expect(accepted.launchTarget?.provider).toBe("discord");
 
     const firstJoin = await service.confirmJoined(proposed.proposal.id, {
-      participantId: "u1"
+      participantId: " u1 "
     });
 
     expect(firstJoin.session.activeProvider).toBe("messenger");

@@ -66,14 +66,19 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
     const activeProvider = assertProvider(dto.activeProvider);
     const participantIds = new Set<string>();
     const participants = dto.participants.map((participant) => {
-      const id = participant.id ?? randomUUID();
+      const participantId = participant.id?.trim();
+      const id = participantId || randomUUID();
       if (participantIds.has(id)) {
         throw new BadRequestException("Participant ids must be unique.");
       }
       participantIds.add(id);
+      const displayName = this.trimRequired(
+        participant.displayName,
+        "Participant display names are required."
+      );
       return {
         id,
-        displayName: participant.displayName.trim()
+        displayName
       };
     });
 
@@ -146,9 +151,9 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
         id: randomUUID(),
         session: storedSession.session,
         toProvider: dto.toProvider,
-        reason: dto.reason,
-        requesterId: dto.requesterId,
-        recipientId: dto.recipientId,
+        reason: this.trimRequired(dto.reason, "Switch reason is required."),
+        requesterId: this.trimRequired(dto.requesterId, "Requester id is required."),
+        recipientId: this.trimRequired(dto.recipientId, "Recipient id is required."),
         now: new Date(),
         ttlMs: SWITCH_TTL_MS
       });
@@ -182,7 +187,7 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
       const updatedProposal = acceptSwitchProposal(
         storedSession.session,
         proposal,
-        dto.participantId,
+        this.trimRequired(dto.participantId, "Participant id is required."),
         new Date()
       );
 
@@ -225,7 +230,7 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
       const updatedProposal = rejectSwitchProposal(
         storedSession.session,
         proposal,
-        dto.participantId,
+        this.trimRequired(dto.participantId, "Participant id is required."),
         new Date()
       );
 
@@ -246,7 +251,7 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
       const result = confirmJoinedProvider(
         storedSession.session,
         proposal,
-        dto.participantId,
+        this.trimRequired(dto.participantId, "Participant id is required."),
         new Date()
       );
 
@@ -312,6 +317,15 @@ export class SessionsService implements OnModuleInit, OnModuleDestroy {
   private trimOptional(value?: string) {
     const trimmed = value?.trim();
     return trimmed ? trimmed : undefined;
+  }
+
+  private trimRequired(value: string, message: string) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new BadRequestException(message);
+    }
+
+    return trimmed;
   }
 
   private scheduleExpiry(proposalId: string, expiresAt: Date) {

@@ -62,9 +62,14 @@ export interface CreateSwitchProposalInput {
 
 export function createSwitchProposal(input: CreateSwitchProposalInput): SwitchProposal {
   const toProvider = assertProvider(input.toProvider);
+  const reason = input.reason.trim();
 
   if (toProvider === input.session.activeProvider) {
     throw new Error("Switch proposal must target a different provider.");
+  }
+
+  if (!reason) {
+    throw new Error("Switch proposal reason is required.");
   }
 
   ensureParticipant(input.session, input.requesterId);
@@ -80,7 +85,7 @@ export function createSwitchProposal(input: CreateSwitchProposalInput): SwitchPr
     sessionId: input.session.id,
     fromProvider: input.session.activeProvider,
     toProvider,
-    reason: input.reason.trim(),
+    reason,
     requesterId: input.requesterId,
     recipientId: input.recipientId,
     status: "proposed",

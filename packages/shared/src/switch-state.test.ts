@@ -33,6 +33,33 @@ describe("switch state machine", () => {
     ).toThrow("different provider");
   });
 
+  it("trims switch reasons and rejects blank reasons", () => {
+    const proposal = createSwitchProposal({
+      id: "proposal-1",
+      session,
+      toProvider: "discord",
+      reason: " streaming ",
+      requesterId: "u1",
+      recipientId: "u2",
+      now: new Date("2026-05-23T00:00:00.000Z"),
+      ttlMs: 60_000
+    });
+
+    expect(proposal.reason).toBe("streaming");
+    expect(() =>
+      createSwitchProposal({
+        id: "proposal-2",
+        session,
+        toProvider: "discord",
+        reason: "   ",
+        requesterId: "u1",
+        recipientId: "u2",
+        now: new Date("2026-05-23T00:00:00.000Z"),
+        ttlMs: 60_000
+      })
+    ).toThrow("reason is required");
+  });
+
   it("requires both users to accept before launch and confirm before session switch", () => {
     const proposal = createSwitchProposal({
       id: "proposal-1",
